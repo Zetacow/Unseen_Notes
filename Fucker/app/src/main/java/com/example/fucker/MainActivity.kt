@@ -105,34 +105,39 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             discoveryStatusText?.text = "Peer discovery started..."
         }
-        manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                Log.d("MainActivity", "Discovery Started")
-                // Set a timeout to stop discovery after 1 minute
-                Handler(Looper.getMainLooper()).postDelayed({
-                    manager.stopPeerDiscovery(channel, object : WifiP2pManager.ActionListener {
-                        override fun onSuccess() {
-                            Log.d("MainActivity", "Peer discovery stopped after timeout.")
-                            runOnUiThread {
-                                discoveryStatusText?.text = "Peer discovery stopped."
+        try {
+            manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Log.d("MainActivity", "Discovery Started")
+                    // Set a timeout to stop discovery after 1 minute
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        manager.stopPeerDiscovery(channel, object : WifiP2pManager.ActionListener {
+                            override fun onSuccess() {
+                                Log.d("MainActivity", "Peer discovery stopped after timeout.")
+                                runOnUiThread {
+                                    discoveryStatusText?.text = "Peer discovery stopped."
+                                }
                             }
-                        }
-                        override fun onFailure(reason: Int) {
-                            Log.d("MainActivity", "Failed to stop peer discovery: $reason")
-                            runOnUiThread {
-                                discoveryStatusText?.text = "Failed to stop peer discovery."
+                            override fun onFailure(reason: Int) {
+                                Log.e("MainActivity", "Failed to stop peer discovery: $reason")
+                                runOnUiThread {
+                                    discoveryStatusText?.text = "Failed to stop peer discovery."
+                                }
                             }
-                        }
-                    })
-                }, 60_000)
-            }
-            override fun onFailure(reason: Int) {
-                Log.d("MainActivity", "Discovery Failed: $reason")
-                runOnUiThread {
-                    discoveryStatusText?.text = "Peer discovery failed."
+                        })
+                    }, 60_000)
                 }
-            }
-        })
+                override fun onFailure(reason: Int) {
+                    Log.e("MainActivity", "Discovery failed: $reason")
+                    runOnUiThread {
+                        discoveryStatusText?.text = "Peer discovery failed."
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            Log.e("MainActivity", "discoverPeers error: ${e.message}")
+            Log.e("MainActivity", Log.getStackTraceString(e))
+        }
     }
 
     // Listener for discovered peers; logs their info and updates UI
@@ -317,24 +322,16 @@ class MainActivity : AppCompatActivity() {
     // Attempts to fallback to P2P connection if Wi-Fi fails
     private fun fallbackToP2P() {
         executor.execute {
-            Log.d("MainActivity", "Attempting to fallback to P2P connection...")
-            // Re-initiate peer discovery and connection
-            discoverPeers()
-        }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Chat error: ${e.message}")
-            Log.e("MainActivity", Log.getStackTraceString(e))
+            try {
+                Log.d("MainActivity", "Attempting to fallback to P2P connection...")
+                // Re-initiate peer discovery and connection
+                discoverPeers()
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Fallback to P2P error: ${e.message}")
+                Log.e("MainActivity", Log.getStackTraceString(e))
+            }
         }
     }
-
-    // Checks if two IPs are on the same /24 subnet
-    // Checks if two IPs are on the same /24 subnet (same local network)
-    private fun isSameSubnet(ip1: String, ip2: String): Boolean {
-        val subnet1 = ip1.substringBeforeLast('.')
-        val subnet2 = ip2.substringBeforeLast('.')
-        return subnet1 == subnet2
-    }
-
     /**
      * Encrypts a message using AES-256.
      * Returns an empty string if encryption is not established.
