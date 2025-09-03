@@ -2,3 +2,4 @@ Fucker/.gradle/
 Fucker/build/
 Fucker/app/build/
 
+**/gradle-wrapper.jar
