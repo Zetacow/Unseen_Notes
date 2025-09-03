@@ -1,0 +1,25 @@
+name: Android CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+      - name: Install Android SDK
+        run: |
+          bash scripts/setup-android-sdk.sh
+      - name: Generate Gradle wrapper JAR
+        run: |
+          cd Fucker
+          gradle wrapper --gradle-version 7.0.2
+      - name: Run tests
+        run: |
+          cd Fucker
+          ./gradlew test --no-daemon --console=plain
