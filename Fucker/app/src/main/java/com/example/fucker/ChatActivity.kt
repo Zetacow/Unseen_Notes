@@ -12,7 +12,10 @@ import java.io.PrintWriter
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.Socket
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import java.security.SecureRandom
 
 class ChatActivity : AppCompatActivity() {
     private lateinit var chatListView: ListView
@@ -75,10 +78,14 @@ class ChatActivity : AppCompatActivity() {
 
     private fun encryptMessage(message: String): String {
         return try {
-            val cipher = javax.crypto.Cipher.getInstance("AES")
-            cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, aesKey)
-            val encrypted = cipher.doFinal(message.toByteArray(Charsets.UTF_8))
-            android.util.Base64.encodeToString(encrypted, android.util.Base64.DEFAULT)
+            val iv = ByteArray(12)
+            SecureRandom().nextBytes(iv)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(128, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, aesKey, spec)
+            val ciphertext = cipher.doFinal(message.toByteArray(Charsets.UTF_8))
+            val combined = iv + ciphertext
+            android.util.Base64.encodeToString(combined, android.util.Base64.DEFAULT)
         } catch (e: Exception) {
             ""
         }
@@ -86,9 +93,14 @@ class ChatActivity : AppCompatActivity() {
 
     private fun decryptMessage(encrypted: String): String {
         return try {
-            val cipher = javax.crypto.Cipher.getInstance("AES")
-            cipher.init(javax.crypto.Cipher.DECRYPT_MODE, aesKey)
-            val decrypted = cipher.doFinal(android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT))
+            val decoded = android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT)
+            if (decoded.size < 13) return ""
+            val iv = decoded.copyOfRange(0, 12)
+            val ciphertext = decoded.copyOfRange(12, decoded.size)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(128, iv)
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, spec)
+            val decrypted = cipher.doFinal(ciphertext)
             String(decrypted, Charsets.UTF_8)
         } catch (e: Exception) {
             ""

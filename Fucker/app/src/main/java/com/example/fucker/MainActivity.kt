@@ -38,12 +38,15 @@ import java.security.PublicKey
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.KeyAgreement
 import javax.crypto.Cipher
+import javax.crypto.Mac
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import android.util.Base64
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.KeyStore
 import android.widget.TextView
+import java.security.SecureRandom
 
 // Singleton to hold chat session info
 object ChatSession {
@@ -260,10 +263,11 @@ class MainActivity : AppCompatActivity() {
         val keyFactory = KeyFactory.getInstance("DH")
         val peerPubKey: PublicKey = keyFactory.generatePublic(X509EncodedKeySpec(peerPubKeyBytes))
 
-        // Generate shared secret
+        // Generate shared secret and derive AES key using HKDF
         keyAgreement.doPhase(peerPubKey, true)
         val sharedSecret = keyAgreement.generateSecret()
-        aesKey = SecretKeySpec(sharedSecret.copyOf(32), "AES") // Use first 32 bytes for AES-256
+        val derived = hkdf(sharedSecret, 32)
+        aesKey = SecretKeySpec(derived, "AES")
 
         // Exchange local IP addresses to check shared network
         val myIp = socket.localAddress.hostAddress
@@ -332,7 +336,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     /**
-     * Encrypts a message using AES-256.
+     * Encrypts a message using AES/GCM with a random IV.
      * Returns an empty string if encryption is not established.
      */
     private fun encryptMessage(message: String): String {
@@ -341,10 +345,14 @@ class MainActivity : AppCompatActivity() {
             return ""
         }
         return try {
-            val cipher = Cipher.getInstance("AES")
-            cipher.init(Cipher.ENCRYPT_MODE, aesKey)
-            val encrypted = cipher.doFinal(message.toByteArray(Charsets.UTF_8))
-            Base64.encodeToString(encrypted, Base64.DEFAULT)
+            val iv = ByteArray(12)
+            SecureRandom().nextBytes(iv)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(128, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, aesKey, spec)
+            val ciphertext = cipher.doFinal(message.toByteArray(Charsets.UTF_8))
+            val combined = iv + ciphertext
+            Base64.encodeToString(combined, Base64.DEFAULT)
         } catch (e: Exception) {
             Log.e("MainActivity", "Encryption error: ${e.message}")
             Log.e("MainActivity", Log.getStackTraceString(e))
@@ -353,20 +361,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Decrypts a message using AES-256.
+     * Decrypts a message using AES/GCM.
      * Returns an empty string if decryption fails.
      */
     private fun decryptMessage(encrypted: String): String {
         return try {
-            val cipher = Cipher.getInstance("AES")
-            cipher.init(Cipher.DECRYPT_MODE, aesKey)
-            val decrypted = cipher.doFinal(Base64.decode(encrypted, Base64.DEFAULT))
+            val decoded = Base64.decode(encrypted, Base64.DEFAULT)
+            if (decoded.size < 13) return ""
+            val iv = decoded.copyOfRange(0, 12)
+            val ciphertext = decoded.copyOfRange(12, decoded.size)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(128, iv)
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, spec)
+            val decrypted = cipher.doFinal(ciphertext)
             String(decrypted, Charsets.UTF_8)
         } catch (e: Exception) {
             Log.e("MainActivity", "Decryption error: ${e.message}")
             Log.e("MainActivity", Log.getStackTraceString(e))
             ""
         }
+    }
+
+    private fun hkdf(input: ByteArray, length: Int): ByteArray {
+        val salt = ByteArray(32) // all zeros
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(salt, "HmacSHA256"))
+        val prk = mac.doFinal(input)
+        var result = ByteArray(0)
+        var t = ByteArray(0)
+        var counter = 1
+        while (result.size < length) {
+            mac.init(SecretKeySpec(prk, "HmacSHA256"))
+            t = mac.doFinal(t + "AES key".toByteArray() + byteArrayOf(counter.toByte()))
+            result += t
+            counter++
+        }
+        return result.copyOf(length)
     }
 
     /**
