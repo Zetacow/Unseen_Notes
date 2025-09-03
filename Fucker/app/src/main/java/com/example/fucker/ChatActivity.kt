@@ -7,12 +7,11 @@ import android.widget.EditText
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.example.fucker.ChatSession
+import java.io.OutputStreamWriter
 import java.io.PrintWriter
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.Socket
-import android.os.Handler
-import android.os.Looper
 import javax.crypto.spec.SecretKeySpec
 
 class ChatActivity : AppCompatActivity() {
