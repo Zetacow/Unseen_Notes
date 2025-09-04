@@ -13,6 +13,7 @@ export ANDROID_SDK_ROOT="$SDK_ROOT"
 set +o pipefail
 yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
   "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses
 export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/34.0.0:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
 if [[ -n "${GITHUB_PATH:-}" ]]; then
   echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
